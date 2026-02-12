@@ -200,6 +200,30 @@ class MT5Service:
     # Order Operations
     # ─────────────────────────────────────────────
 
+    def _get_filling_mode(self, symbol: str) -> int:
+        """
+        Determine the correct filling mode for a symbol.
+        Checks symbol_info.filling_mode flags to return valid mode:
+        IOC > FOK > RETURN
+        """
+        symbol_info = mt5.symbol_info(symbol)
+        if symbol_info is None:
+            return mt5.ORDER_FILLING_FOK  # Default assumption
+
+        filling = symbol_info.filling_mode
+
+        # Define constants manually if not in mt5 module
+        _SYMBOL_FILLING_FOK = 1
+        _SYMBOL_FILLING_IOC = 2
+        
+        if filling & _SYMBOL_FILLING_IOC:
+            return mt5.ORDER_FILLING_IOC
+        
+        if filling & _SYMBOL_FILLING_FOK:
+            return mt5.ORDER_FILLING_FOK
+            
+        return mt5.ORDER_FILLING_RETURN
+
     def place_market_order(
         self,
         symbol: str,
@@ -215,6 +239,13 @@ class MT5Service:
         Place a market order.
         order_type: 0 = BUY, 1 = SELL
         """
+        # Ensure symbol is selected and visible
+        if not mt5.symbol_select(symbol, True):
+            return OrderResult(
+                success=False,
+                error_message=f"Cannot select symbol {symbol}"
+            )
+        
         # Get current price
         tick = mt5.symbol_info_tick(symbol)
         if tick is None:
@@ -243,7 +274,7 @@ class MT5Service:
             "magic": magic,
             "comment": comment,
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
+            "type_filling": self._get_filling_mode(symbol),
         }
 
         result = mt5.order_send(request)
@@ -256,10 +287,17 @@ class MT5Service:
             )
 
         if result.retcode != mt5.TRADE_RETCODE_DONE:
+            # Provide helpful message for common errors
+            error_msg = f"Order failed: retcode={result.retcode}, comment={result.comment}"
+            if result.retcode == 10027:  # TRADE_RETCODE_CLIENT_DISABLE_AUTOTRADE
+                error_msg = f"❌ AutoTrading disabled! Enable it in MT5: Tools → Options → Expert Advisors → Allow automated trading"
+            elif result.retcode == 10030:  # TRADE_RETCODE_INVALID_FILLING
+                error_msg = f"❌ Unsupported filling mode. Check MT5 account settings."
+            
             return OrderResult(
                 success=False,
                 error_code=result.retcode,
-                error_message=f"Order failed: retcode={result.retcode}, comment={result.comment}",
+                error_message=error_msg,
                 retcode=result.retcode,
             )
 
@@ -307,7 +345,7 @@ class MT5Service:
             "magic": pos.magic,
             "comment": "CopyTrade Close",
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
+            "type_filling": self._get_filling_mode(pos.symbol),
         }
 
         result = mt5.order_send(request)
@@ -362,7 +400,7 @@ class MT5Service:
             "magic": pos.magic,
             "comment": "CopyTrade Partial",
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
+            "type_filling": self._get_filling_mode(pos.symbol),
         }
 
         result = mt5.order_send(request)
