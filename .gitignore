@@ -1,7 +1,7 @@
 # Environment variables (credentials)
-.env
-.env.master
-.env.slave
+# .env
+# .env.master
+# .env.slave
 
 # Logs
 logs/
