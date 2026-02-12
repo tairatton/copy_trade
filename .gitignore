@@ -1,0 +1,27 @@
+# Environment variables (credentials)
+.env
+.env.master
+.env.slave
+
+# Logs
+logs/
+*.log
+
+# Position backup
+position_map.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
